@@ -25,6 +25,7 @@ private:
     void TryBuildHatchery();
     void TryCreateZergQueen();
     void TryFillGasExtractor();
+    void TryResearchMetabolicBoost();
     const Unit *FindNearestMineralPatch(const Point2D &start);
 
     size_t CountUnitType(UNIT_TYPEID unit_type);
@@ -33,6 +34,7 @@ private:
     const Unit *FindNearestExtractor(ABILITY_ID unit_ability);
     int GetQueensInQueue(const sc2::Unit *hatchery);
     std::vector<const sc2::Unit *> GetMineralGatheringDrones();
+    std::vector<const Unit*> GetGasGatheringDrones();
     bool IsExtractorBeingHarvested(const sc2::Unit *extractor);
 };
 
