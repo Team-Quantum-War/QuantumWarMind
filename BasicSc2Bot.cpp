@@ -200,22 +200,29 @@ bool BasicSc2Bot::TryBuildSpawningPool()
 // {
 // }
 
+/*
+Function that creates a zerg queen when conditions are met
+condition: For each spawning pool we will have one zerg queen
+*/
 void BasicSc2Bot::TryCreateZergQueen()
 {
     const Units &hatcheries = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_HATCHERY));
     if (CountUnitType(UNIT_TYPEID::ZERG_SPAWNINGPOOL) > CountUnitType(UNIT_TYPEID::ZERG_QUEEN) && GetQueensInQueue(hatcheries.front()) < CountUnitType(UNIT_TYPEID::ZERG_SPAWNINGPOOL))
-    {
+    {// must make sure that we are not ordering more in queue by the time one queen is created
         Actions()->UnitCommand(hatcheries.front(), sc2::ABILITY_ID::TRAIN_QUEEN);
-        cout << "QUEEN CREATE NOW LOL" << endl;
+        //cout << "QUEEN CREATE NOW LOL" << endl;
     }
 }
 
+/*
+This function sends drones to extractors to extract gas.
+*/
 void BasicSc2Bot::TryFillGasExtractor()
 {
-    std::cout << "HERE BRO LOL" << std::endl;
+    //std::cout << "HERE BRO LOL" << std::endl;
     std::vector<const sc2::Unit *> mineralGatheringDrones = GetMineralGatheringDrones();
     const Units &extractors = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_EXTRACTOR));
-
+    // iterate over all the extractor and see if the extractor is valid, fully built and not being harvested already
     for (const auto &extractor : extractors)
     {
         if (!extractor || extractor->build_progress < 1.0f || IsExtractorBeingHarvested(extractor))
@@ -223,7 +230,7 @@ void BasicSc2Bot::TryFillGasExtractor()
             return;
         }
 
-        int max_drones = 0;
+        int max_drones = 0; // for now we are giving 13 drones to collect from one extractor
         for (const auto &drone : mineralGatheringDrones)
         {
             if (max_drones > 13)
@@ -289,6 +296,9 @@ Point2D BasicSc2Bot::FindNearestBuildLocation(sc2::UNIT_TYPEID type_)
     return buildLocation;
 }
 
+/*
+This function is used find the nearest extractor from the first hatchery
+*/
 const Unit *BasicSc2Bot::FindNearestExtractor(ABILITY_ID unit_ability)
 {
     const ObservationInterface *observation = Observation();
@@ -312,13 +322,16 @@ const Unit *BasicSc2Bot::FindNearestExtractor(ABILITY_ID unit_ability)
     }
 }
 
+/*
+Returns the number of queens that are queued to be hatched in hatchery
+*/
 int BasicSc2Bot::GetQueensInQueue(const sc2::Unit *hatchery)
 {
     int queensInQueue = 0;
     if (hatchery)
     {
-        const auto &orders = hatchery->orders;
-
+        const auto &orders = hatchery->orders; // get all the orders in hatchery
+        // iterate over the orders and see if there is any queen to be trained
         for (const auto &order : orders)
         {
             if (order.ability_id == sc2::ABILITY_ID::TRAIN_QUEEN)
@@ -330,13 +343,17 @@ int BasicSc2Bot::GetQueensInQueue(const sc2::Unit *hatchery)
     return queensInQueue;
 }
 
+/*
+This function is used to find all the drones that are currently gathering minerals.
+Returns a vector object with all the drones ordered to gather minerals.
+*/
 std::vector<const sc2::Unit *> BasicSc2Bot::GetMineralGatheringDrones()
 {
     std::vector<const sc2::Unit *> mineralGatheringDrones;
-
+    //iterate over all the units
     for (const auto &unit : Observation()->GetUnits(sc2::Unit::Alliance::Self))
     {
-        if (unit->orders.size() > 0)
+        if (unit->orders.size() > 0) //check if unit is not idle, i.e. has an order
         {
             if (unit->orders[0].ability_id == sc2::ABILITY_ID::HARVEST_GATHER)
             {
@@ -348,13 +365,17 @@ std::vector<const sc2::Unit *> BasicSc2Bot::GetMineralGatheringDrones()
     return mineralGatheringDrones;
 }
 
+/*
+This function checks if a extractor is already being harvesed by zerg drones or not
+*/
 bool BasicSc2Bot::IsExtractorBeingHarvested(const sc2::Unit *extractor)
 {
+    //invalid extractor
     if (!extractor)
     {
         return false;
     }
-
+    // check if any unit belonging to player is already being harvested or is ordered to be harvested
     for (const auto &unit : Observation()->GetUnits(sc2::Unit::Alliance::Self))
     {
         if (unit->orders.size() > 0)
