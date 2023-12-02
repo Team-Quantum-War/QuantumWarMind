@@ -192,13 +192,13 @@ void BasicSc2Bot::TryNaturallyExpand()
 void BasicSc2Bot::TryFillGasExtractor()
 {
     // Get mineral-gathering drones and extractors
-    std::vector<const sc2::Unit *> mineralGatheringDrones = GetMineralGatheringDrones();
+    std::vector<const sc2::Unit *> mineralGatheringDrones = GetCurrentHarvestingDrones();
     const Units &extractors = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_EXTRACTOR));
 
     // Check conditions and attempt to fill gas
     for (const auto &extractor : extractors)
     {
-        if (!extractor || extractor->build_progress < 1.0f || extractor->assigned_harvesters > 0)
+        if (!extractor || extractor->build_progress < 1.0f || extractor->assigned_harvesters > 0 || isLingSpeedResearched)
         {
             return;
         }
@@ -242,7 +242,7 @@ void BasicSc2Bot::TryCreateZergQueen()
 }
 
 /*
-Function that researches Zergling speed once enough resources are gathered and then pull out drones to research minerals again.
+This function researches Zergling speed once enough resources are gathered and then pull out gas-harvesting drones to collect minerals again by making them idle.
 */
 void BasicSc2Bot::TryResearchMetabolicBoost()
 {
@@ -253,26 +253,29 @@ void BasicSc2Bot::TryResearchMetabolicBoost()
     {
         const Units &spawningPools = observation->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_SPAWNINGPOOL));
 
-        // Check if you have a Spawning Pool
+        // Check if you have a Spawning Pool and ling speed has not been researched yet
         if (!spawningPools.empty())
         {
             const Unit *spawningPool = spawningPools.front(); // Use the first available Spawning Pool
+
             Actions()->UnitCommand(spawningPool, ABILITY_ID::RESEARCH_ZERGLINGMETABOLICBOOST);
             if (DEBUG_MODE)
             {
                 std::cout << "We are researching ling speed right now!" << std::endl;
             }
 
-            // // Pull workers off gas extractors
-            // std::vector<const sc2::Unit*> gasGatheringDrones = GetGasGatheringDrones();
-            // for (const auto& drone : gasGatheringDrones) {
-            //     // Check if the drone's order is to gather gas
-            //     if (drone->orders.size() > 0 && drone->orders[0].ability_id == ABILITY_ID::HARVEST_GATHER) {
-            //         Actions()->UnitCommand(drone, ABILITY_ID::HARVEST_RETURN);
-            //     }
-            // }
+            // Pull workers off gas extractors
+            std::vector<const sc2::Unit *> gasGatheringDrones = GetCurrentHarvestingDrones();
+            for (const auto &drone : gasGatheringDrones)
+            {
+                Actions()->UnitCommand(drone, ABILITY_ID::STOP);
+            }
+
+            isLingSpeedResearched = true;
         }
     }
+
+    return;
 }
 
 /*
@@ -441,7 +444,7 @@ int BasicSc2Bot::GetQueensInQueue(const sc2::Unit *hatchery)
 }
 
 /* Gets all mineral-gathering drones*/
-std::vector<const sc2::Unit *> BasicSc2Bot::GetMineralGatheringDrones()
+std::vector<const sc2::Unit *> BasicSc2Bot::GetCurrentHarvestingDrones()
 {
     std::vector<const sc2::Unit *> mineralGatheringDrones;
     std::vector<const sc2::Unit *> units = Observation()->GetUnits(sc2::Unit::Alliance::Self);
@@ -481,6 +484,8 @@ sc2::Point2D BasicSc2Bot::FindExpansionLocation(float minDistanceSquared, float 
             validMineralPatches.push_back(mineralPatch);
         }
     }
+
+    cout << "SIZE OF MINERAL PATCHES: " << validMineralPatches.size() << endl;
 
     // Randomly select a valid mineral patch as near the expansion location.
     if (!validMineralPatches.empty())

@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
     while (coordinator.Update())
     {
         // Slowing down gamespeed so I can see what's happening
-        SleepFor(15);
+        // SleepFor(15);
     }
     return 0;
 }

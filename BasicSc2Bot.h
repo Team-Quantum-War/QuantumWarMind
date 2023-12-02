@@ -19,6 +19,9 @@ public:
     virtual void OnUnitIdle(const Unit *unit) final;
 
 private:
+    // Private variables
+    bool isLingSpeedResearched = false;
+
     // Private game-loop functions
     void TryBuildExtractor();
     void TryBuildSpawningPool();
@@ -36,11 +39,12 @@ private:
     Point2D FindNearestBuildLocationTo(sc2::UNIT_TYPEID type_);
     const Unit *FindNearestGeyser(ABILITY_ID unit_ability);
     int GetQueensInQueue(const sc2::Unit *hatchery);
-    std::vector<const sc2::Unit *> GetMineralGatheringDrones();
+    std::vector<const sc2::Unit *> GetCurrentHarvestingDrones();
     sc2::Point2D FindExpansionLocation(float minDistanceSquared, float maxDistanceSquared);
     float DistanceSquared2D(const sc2::Point2D &p1, const sc2::Point2D &p2);
     const sc2::Unit *GetRandomElement(const std::vector<const sc2::Unit *> &elements);
     const Unit *GetMainBaseHatcheryLocation();
+    std::vector<const sc2::Unit *> GetGasGatheringDrones();
 };
 
 #endif
