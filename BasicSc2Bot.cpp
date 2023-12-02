@@ -28,8 +28,8 @@ void BasicSc2Bot::OnStep()
     TryBuildSpawningPool();
     TryNaturallyExpand();
     TryFillGasExtractor();
-    TryResearchMetabolicBoost();
     TryCreateZergQueen();
+    TryResearchMetabolicBoost();
 }
 
 /* This function is called when a new unit is created. */
@@ -59,8 +59,6 @@ void BasicSc2Bot::OnUnitCreated(const Unit *unit)
         }
     }
 }
-
-
 
 /* This function is called when a unit becomes idle. */
 void BasicSc2Bot::OnUnitIdle(const Unit *unit)
@@ -244,6 +242,40 @@ void BasicSc2Bot::TryCreateZergQueen()
 }
 
 /*
+Function that researches Zergling speed once enough resources are gathered and then pull out drones to research minerals again.
+*/
+void BasicSc2Bot::TryResearchMetabolicBoost()
+{
+    const ObservationInterface *observation = Observation();
+
+    // Check if we have 100 gas and a spawning pool to research
+    if (observation->GetVespene() >= 100)
+    {
+        const Units &spawningPools = observation->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_SPAWNINGPOOL));
+
+        // Check if you have a Spawning Pool
+        if (!spawningPools.empty())
+        {
+            const Unit *spawningPool = spawningPools.front(); // Use the first available Spawning Pool
+            Actions()->UnitCommand(spawningPool, ABILITY_ID::RESEARCH_ZERGLINGMETABOLICBOOST);
+            if (DEBUG_MODE)
+            {
+                std::cout << "We are researching ling speed right now!" << std::endl;
+            }
+
+            // // Pull workers off gas extractors
+            // std::vector<const sc2::Unit*> gasGatheringDrones = GetGasGatheringDrones();
+            // for (const auto& drone : gasGatheringDrones) {
+            //     // Check if the drone's order is to gather gas
+            //     if (drone->orders.size() > 0 && drone->orders[0].ability_id == ABILITY_ID::HARVEST_GATHER) {
+            //         Actions()->UnitCommand(drone, ABILITY_ID::HARVEST_RETURN);
+            //     }
+            // }
+        }
+    }
+}
+
+/*
 ===========================================================================
                             HELPER FUNCTIONS
 ===========================================================================
@@ -416,7 +448,7 @@ std::vector<const sc2::Unit *> BasicSc2Bot::GetMineralGatheringDrones()
 
     for (const auto &unit : units)
     {
-        if (unit->orders.size() > 0) //check if unit is not idle, i.e. has an order
+        if (unit->orders.size() > 0) // check if unit is not idle, i.e. has an order
         {
             if (unit->orders[0].ability_id == sc2::ABILITY_ID::HARVEST_GATHER)
             {
@@ -503,31 +535,3 @@ const Unit *BasicSc2Bot::GetMainBaseHatcheryLocation()
     // Return a null
     return nullptr;
 }
-
-
-/*
-Function that reserches Zergling speed once enough resources are gathered and then pull out drones to reserch minerals again
-*/
-void BasicSc2Bot::TryResearchMetabolicBoost() {
-    const ObservationInterface *observation = Observation();
-
-    // Check if we have 100 gas and a spawning pool to research
-    if (observation->GetVespene() >= 100) {
-        const Units& spawningPools = observation->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_SPAWNINGPOOL));
-        
-        // Check if you have a Spawning Pool
-        if (!spawningPools.empty()) {
-            const Unit* spawningPool = spawningPools.front(); // Use the first available Spawning Pool
-            Actions()->UnitCommand(spawningPool, ABILITY_ID::RESEARCH_ZERGLINGMETABOLICBOOST);
-
-            // // Pull workers off gas extractors
-            // std::vector<const sc2::Unit*> gasGatheringDrones = GetGasGatheringDrones();
-            // for (const auto& drone : gasGatheringDrones) {
-            //     // Check if the drone's order is to gather gas
-            //     if (drone->orders.size() > 0 && drone->orders[0].ability_id == ABILITY_ID::HARVEST_GATHER) {
-            //         Actions()->UnitCommand(drone, ABILITY_ID::HARVEST_RETURN);
-            //     }
-            // }
-        }
-    }
-}        
