@@ -485,8 +485,6 @@ sc2::Point2D BasicSc2Bot::FindExpansionLocation(float minDistanceSquared, float 
         }
     }
 
-    cout << "SIZE OF MINERAL PATCHES: " << validMineralPatches.size() << endl;
-
     // Randomly select a valid mineral patch as near the expansion location.
     if (!validMineralPatches.empty())
     {

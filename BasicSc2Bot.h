@@ -26,6 +26,8 @@ private:
     void TryBuildExtractor();
     void TryBuildSpawningPool();
     void TryNaturallyExpand();
+    void TryBuildSpawningPool();
+    void TryNaturallyExpand();
     void TryCreateZergQueen();
     void TryFillGasExtractor();
     void TryResearchMetabolicBoost();
