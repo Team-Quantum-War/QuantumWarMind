@@ -20,7 +20,21 @@ void BasicSc2Bot::OnGameStart()
     {
         std::cout << "It's Gamin time" << std::endl;
     }
+
+    ideal_num_zerglings = 25;
+
+    possible_enemy_base_locations = Observation()->GetGameInfo().enemy_start_locations;
+
+    race_bases.push_back(UNIT_TYPEID::ZERG_HATCHERY);
+    race_bases.push_back(UNIT_TYPEID::PROTOSS_NEXUS);
+    race_bases.push_back(UNIT_TYPEID::TERRAN_COMMANDCENTER);
+
+    for (auto base : possible_enemy_base_locations)
+    {
+        std::cout << "Enemy Base could be at (" << base.x << "," << base.y << ")" << std::endl;
+    }
 }
+
 /* This function is called on each game step. */
 void BasicSc2Bot::OnStep()
 {
@@ -30,6 +44,9 @@ void BasicSc2Bot::OnStep()
     TryFillGasExtractor();
     TryCreateZergQueen();
     TryResearchMetabolicBoost();
+    DetermineEnemyBase();
+    HandleQueens();
+    HandleZerglings();
 }
 
 /* This function is called when a new unit is created. */
@@ -57,6 +74,37 @@ void BasicSc2Bot::OnUnitCreated(const Unit *unit)
         {
             std::cout << "Hatcher created with tag: " << unit->tag << std::endl;
         }
+        if (unit->unit_type == UNIT_TYPEID::ZERG_QUEEN)
+        {
+            std::cout << "Queen created with tag: " << unit->tag << std::endl;
+        }
+    }
+    if (unit->unit_type == UNIT_TYPEID::ZERG_QUEEN)
+    {
+        queens.push_back(unit);
+        queenHasInjected[unit] = false; // Initialize the queen's status
+        queenCounter++;                 // Increment the queen counter
+    }
+    if (unit->unit_type == sc2::UNIT_TYPEID::ZERG_HATCHERY)
+    {
+        hatcheries.push_back(unit);
+    }
+}
+
+/* This function is called when a unit is damaged. */
+void BasicSc2Bot::OnUnitDamaged(const Unit *unit)
+{
+    switch (unit->unit_type.ToType())
+    {
+    case UNIT_TYPEID::ZERG_OVERLORD:
+    {
+        Actions()->UnitCommand(unit, ABILITY_ID::MOVE_MOVE, Observation()->GetStartLocation());
+        break;
+    }
+    default:
+    {
+        break;
+    }
     }
 }
 
@@ -67,10 +115,17 @@ void BasicSc2Bot::OnUnitIdle(const Unit *unit)
     {
     case UNIT_TYPEID::ZERG_LARVA:
     {
-        // Get the # of supply used and # of drones and overlords on field + in production
+
+        // Get the # of supply used and # of drones, overlords, and queens on field + in production
+        size_t sum_queens = 0;
         size_t usedSupply = Observation()->GetFoodUsed();
         size_t sum_overlords = CountUnitType(UNIT_TYPEID::ZERG_OVERLORD) + CountEggUnitsInProduction(ABILITY_ID::TRAIN_OVERLORD);
         size_t sum_drones = CountUnitType(UNIT_TYPEID::ZERG_DRONE) + CountEggUnitsInProduction(ABILITY_ID::TRAIN_DRONE);
+        for (const auto &hatchery : hatcheries)
+        {
+            sum_queens += GetQueensInQueue(hatchery);
+        }
+        sum_queens += CountUnitType(sc2::UNIT_TYPEID::ZERG_QUEEN);
 
         // What to do when idle?
         if (sum_overlords < 2 && sum_drones == 13) // when we make our 13th drone we need to make an Overlord
@@ -81,16 +136,48 @@ void BasicSc2Bot::OnUnitIdle(const Unit *unit)
         {
             Actions()->UnitCommand(unit, ABILITY_ID::TRAIN_OVERLORD);
         }
-        else if (usedSupply < 17) // cap # of drones at 17 during prep phase (before queens)
+        else if (usedSupply >= 30 && sum_overlords < 4) // when we reach supply 30 we need to make an Overlord
+        {
+            Actions()->UnitCommand(unit, ABILITY_ID::TRAIN_OVERLORD);
+            cout << "OVERLORD TRAINED AT 30 HERE" << endl;
+        }
+        else if (sum_drones < 17) // cap # of drones at 17 during prep phase (before queens)
         {
             Actions()->UnitCommand(unit, ABILITY_ID::TRAIN_DRONE);
+        }
+        if (sum_queens >= 2) // spam zerglings when queens are all created
+        {
+            SpamZerglings();
         }
         break;
     }
     case UNIT_TYPEID::ZERG_DRONE:
     {
+        // Get all our hatcheries
+        const Units &hatcheries = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_HATCHERY));
+    sc2:
+        Point3D target;
+        bool full = true;
+
+        // We want to optimize material gathering, try to not overfill hatcheries
+        for (const auto &hatchery : hatcheries)
+        {
+            if (hatchery->ideal_harvesters > hatchery->assigned_harvesters)
+            {
+                target = hatchery->pos;
+                full = false;
+                break;
+            }
+        }
+
+        // If all hatcheries are maxed out then just assign the drone to whichever it is closest to
+        if (full)
+        {
+            target = unit->pos;
+        }
+
         // Find the nearest mineral patch and command the drone to gather from it.
-        const Unit *mineral_target = FindNearestMineralPatch(unit->pos);
+        const Unit *mineral_target = FindNearestMineralPatch(target);
         if (!mineral_target)
         {
             break;
@@ -102,7 +189,15 @@ void BasicSc2Bot::OnUnitIdle(const Unit *unit)
     {
         // Move the Overlord to an enemy base's natural expansion.
         const GameInfo &game_info = Observation()->GetGameInfo();
-        Actions()->UnitCommand(unit, ABILITY_ID::MOVE_MOVEPATROL, FindExpansionLocation(15000.0f, 20000.0f));
+        if (!found_base && !possible_enemy_base_locations.empty())
+        {
+            Actions()->UnitCommand(unit, ABILITY_ID::MOVE_MOVE, possible_enemy_base_locations.back(), true);
+            possible_enemy_base_locations.pop_back();
+        }
+        else
+        {
+            Actions()->UnitCommand(unit, ABILITY_ID::MOVE_MOVE, Observation()->GetStartLocation());
+        }
         break;
     }
     default:
@@ -200,6 +295,22 @@ void BasicSc2Bot::TryFillGasExtractor()
     {
         if (!extractor || extractor->build_progress < 1.0f || extractor->assigned_harvesters > 0 || isLingSpeedResearched)
         {
+            if (extractor->assigned_harvesters > 0 && isLingSpeedResearched)
+            {
+                const Units &yourDrones = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_DRONE));
+
+                // Pull workers off gas extractors
+                for (const auto &drone : yourDrones)
+                {
+                    // Check if the drone is gathering vespene gas from any extractor
+                    if (drone->orders.size() > 0 && drone->orders[0].target_unit_tag == extractors.front()->tag)
+                    {
+                        // Send them to collect minerals
+                        const Unit *mineral_target = FindNearestMineralPatch(drone->pos);
+                        Actions()->UnitCommand(drone, ABILITY_ID::HARVEST_GATHER, mineral_target);
+                    }
+                }
+            }
             return;
         }
         if (DEBUG_MODE)
@@ -214,6 +325,26 @@ void BasicSc2Bot::TryFillGasExtractor()
             actions->UnitCommand(drone, sc2::ABILITY_ID::HARVEST_GATHER, extractor); // just send our first 3 drones in the list to go get gas
             --max_drones;
             mineralGatheringDrones.pop_back();
+        }
+    }
+}
+
+/* Attempts to determine where the enemy base is */
+void BasicSc2Bot::DetermineEnemyBase()
+{
+    if (found_base)
+    {
+        return;
+    }
+
+    const Units &enemy_bases = Observation()->GetUnits(Unit::Alliance::Enemy, IsUnits(race_bases));
+    if (!enemy_bases.empty())
+    {
+        for (auto base : enemy_bases)
+        {
+            enemy_base = base->pos;
+            found_base = true;
+            break;
         }
     }
 }
@@ -235,7 +366,7 @@ void BasicSc2Bot::TryCreateZergQueen()
     // Make two queens
     if (CountUnitType(sc2::UNIT_TYPEID::ZERG_SPAWNINGPOOL) > 0 &&
         CountUnitType(sc2::UNIT_TYPEID::ZERG_HATCHERY) > CountUnitType(sc2::UNIT_TYPEID::ZERG_QUEEN) &&
-        !makingQueen)
+        !makingQueen && Observation()->GetMinerals() >= 150)
     {
         Actions()->UnitCommand(mainHatchery, sc2::ABILITY_ID::TRAIN_QUEEN);
     }
@@ -248,12 +379,12 @@ void BasicSc2Bot::TryResearchMetabolicBoost()
 {
     const ObservationInterface *observation = Observation();
 
-    // Check if we have 100 gas and a spawning pool to research
+    const Units &spawningPools = observation->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_SPAWNINGPOOL));
+
+    // Check if we have 100 gas and ling speed has not been researched yet
     if (observation->GetVespene() >= 100)
     {
-        const Units &spawningPools = observation->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_SPAWNINGPOOL));
-
-        // Check if you have a Spawning Pool and ling speed has not been researched yet
+        // Check if you have a Spawning Pool
         if (!spawningPools.empty())
         {
             const Unit *spawningPool = spawningPools.front(); // Use the first available Spawning Pool
@@ -264,18 +395,125 @@ void BasicSc2Bot::TryResearchMetabolicBoost()
                 std::cout << "We are researching ling speed right now!" << std::endl;
             }
 
-            // Pull workers off gas extractors
-            std::vector<const sc2::Unit *> gasGatheringDrones = GetCurrentHarvestingDrones();
-            for (const auto &drone : gasGatheringDrones)
-            {
-                Actions()->UnitCommand(drone, ABILITY_ID::STOP);
-            }
-
             isLingSpeedResearched = true;
         }
     }
 
     return;
+}
+
+/* This function focuses on spamming Zerglings, making Overlords as necessary. */
+void BasicSc2Bot::SpamZerglings()
+{
+    // Get all larva units
+    const Units &larvae = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_LARVA));
+
+    // Check if you have enough resources for a Zergling
+    int minerals = Observation()->GetMinerals();
+    int vespene = Observation()->GetVespene();
+
+    // Check the supply used and supply limit
+    int supplyUsed = Observation()->GetFoodUsed();
+    int supplyCap = Observation()->GetFoodCap();
+
+    // Loop through each larva to issue commands
+    for (const auto &larva : larvae)
+    {
+        // Check if we need an Overlord (if we're about to hit the supply cap)
+        // if (supplyCap - supplyUsed < 2 && minerals >= 100)
+        // {
+        //     // cout << "TRAINING OVERLORD RIGHT HERE LMAOOOOOOO" << endl;
+        //     // Actions()->UnitCommand(larva, ABILITY_ID::TRAIN_OVERLORD);
+        //     supplyUsed += 8; // Increment used supply assuming the Overlord will be made
+        // }
+        if (minerals >= 50) // Check if we have enough minerals for a Zergling
+        {
+            Actions()->UnitCommand(larva, ABILITY_ID::TRAIN_ZERGLING);
+        }
+    }
+}
+
+/* This function handles the behaviour of our two queens */
+void BasicSc2Bot::HandleQueens()
+{
+    const Units &hatcheries = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_HATCHERY));
+    if (hatcheries.empty() || hatcheries.size() < 2)
+    {
+        return; // EXIT if there are no hatcheries and ensure there is a hatchery at both main and explansion
+    }
+
+    for (const auto &queen : queens)
+    {
+        if (queen->energy < 25)
+        {
+            continue; // skip if the queen doesnt have enough energy
+        }
+
+        int queenIndex = std::distance(queens.begin(), std::find(queens.begin(), queens.end(), queen));
+        if (queenIndex == 0) // first queen
+        {
+            if (!queenHasInjected[queen])
+            {
+                InjectLarvae(queen, hatcheries.front()); // Inject at main base
+                queenHasInjected[queen] = true;
+                Actions()->UnitCommand(queen, ABILITY_ID::MOVE_MOVE, hatcheries[1]->pos); // Move to expansion
+            }
+            else
+            {
+                InjectLarvae(queen, hatcheries[1]); // Continue injecting at expansion
+            }
+        }
+        else if (queenIndex == 1) // second queen
+        {
+            InjectLarvae(queen, hatcheries.front()); // Always inject at main base
+        }
+    }
+}
+
+/* This function handles the behaviour of our of all Zerglings spammed (attacking and retreating) */
+void BasicSc2Bot::HandleZerglings()
+{
+    const Units &zerglings = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_ZERGLING));
+    const Units &enemy_units = Observation()->GetUnits(sc2::Unit::Alliance::Enemy);
+
+    if (zerglings.empty())
+    {
+        return;
+    }
+
+    // attack
+    if (isLingSpeedResearched && zerglings.size() > ideal_num_zerglings)
+    {
+        // have found enemy units
+        retreat = false;
+        if (!enemy_units.empty())
+        {
+            Actions()->UnitCommand(zerglings, ABILITY_ID::ATTACK_ATTACK, enemy_units.front()->pos);
+        }
+        // dont know where any enemy units are
+        else
+        {
+            if (found_base)
+            {
+                Actions()->UnitCommand(zerglings, ABILITY_ID::ATTACK_ATTACK, enemy_base);
+            }
+        }
+    }
+    else
+    {
+        // retreat
+        if (zerglings.size() < ideal_num_zerglings - 15 &&
+            !zerglings.front()->orders.empty() &&
+            zerglings.front()->orders.front().target_pos != Observation()->GetStartLocation())
+        {
+            retreat = true;
+        }
+    }
+    if (retreat)
+    {
+        Actions()->UnitCommand(zerglings, ABILITY_ID::MOVE_MOVE, Observation()->GetStartLocation(), true);
+        retreat = false;
+    }
 }
 
 /*
@@ -390,7 +628,7 @@ Point2D BasicSc2Bot::FindNearestBuildLocationTo(sc2::UNIT_TYPEID type_)
     Point2D buildLocation;
     float rx = GetRandomScalar();
     float ry = GetRandomScalar();
-    buildLocation = Point2D(unit->pos.x + rx * 5.0f, unit->pos.y + ry * 5.0f);
+    buildLocation = Point2D(unit->pos.x + rx * 10.0f, unit->pos.y + ry * 10.0f);
 
     if (DEBUG_MODE)
     {
@@ -424,7 +662,7 @@ const Unit *BasicSc2Bot::FindNearestGeyser(ABILITY_ID unit_ability)
     return nullptr;
 }
 
-/* Gets all queens in production in a hatchery. */
+/* Gets num of queens in production in a hatchery. */
 int BasicSc2Bot::GetQueensInQueue(const sc2::Unit *hatchery)
 {
     int queensInQueue = 0;
@@ -493,7 +731,8 @@ sc2::Point2D BasicSc2Bot::FindExpansionLocation(float minDistanceSquared, float 
         // Calculate the buildable location by adding an offset to the target location.
         float rx = GetRandomScalar();
         float ry = GetRandomScalar();
-        sc2::Point2D build_location = Point2D(selectedMineralPatch->pos.x + rx * 10.0f, selectedMineralPatch->pos.y + ry * 10.0f);
+
+        sc2::Point2D build_location = Point2D(selectedMineralPatch->pos.x + rx * 7.0f, selectedMineralPatch->pos.y + ry * 7.0f);
 
         return build_location;
     }
@@ -537,4 +776,23 @@ const Unit *BasicSc2Bot::GetMainBaseHatcheryLocation()
 
     // Return a null
     return nullptr;
+}
+
+/* Helper function for injecting larvae */
+void BasicSc2Bot::InjectLarvae(const Unit *queen, const Unit *hatchery)
+{
+    Actions()->UnitCommand(queen, ABILITY_ID::EFFECT_INJECTLARVA, hatchery);
+}
+
+/* Checks it unit is near home base */
+bool BasicSc2Bot::IsAtMainBase(const Unit *unit)
+{
+    const float SOME_THRESHOLD = 7.5;
+    const Unit *mainHatchery = GetMainBaseHatcheryLocation();
+    if (!mainHatchery)
+    {
+        return false;
+    }
+
+    return DistanceSquared2D(unit->pos, mainHatchery->pos) < SOME_THRESHOLD;
 }
