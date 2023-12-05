@@ -9,18 +9,10 @@
 
 int main(int argc, char *argv[])
 {
-<<<<<<< HEAD
     Coordinator coordinator;
     coordinator.LoadSettings(argc, argv);
     coordinator.SetFullScreen(false);
     coordinator.SetRealtime(false);
-=======
-    RunBot(argc, argv, new BasicSc2Bot(), sc2::Race::Zerg);
-    // Coordinator coordinator;
-    // coordinator.LoadSettings(argc, argv);
-    // coordinator.SetFullScreen(false);
-    // coordinator.SetRealtime(false);
->>>>>>> main
 
     // BasicSc2Bot bot;
     // coordinator.SetParticipants({CreateParticipant(Race::Zerg, &bot),
@@ -29,18 +21,10 @@ int main(int argc, char *argv[])
     // coordinator.LaunchStarcraft();
     // coordinator.StartGame(kMapCactusValleyLE);
 
-<<<<<<< HEAD
     while (coordinator.Update())
     {
         // Slowing down gamespeed so I can see what's happening
         // SleepFor(15);
     }
-=======
-    // while (coordinator.Update())
-    // {
-    //     // Slowing down gamespeed so I can see what's happening
-    //     // sc2::SleepFor(15);
-    // }
->>>>>>> main
     return 0;
 }
