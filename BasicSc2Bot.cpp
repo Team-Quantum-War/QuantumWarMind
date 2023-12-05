@@ -93,7 +93,8 @@ void BasicSc2Bot::OnUnitCreated(const Unit *unit)
     {
         hatcheries.push_back(unit);
     }
-    if (unit->unit_type == sc2::UNIT_TYPEID::ZERG_OVERLORD) {
+    if (unit->unit_type == sc2::UNIT_TYPEID::ZERG_OVERLORD)
+    {
         if (!found_base && !possible_enemy_base_locations.empty())
         {
             Actions()->UnitCommand(unit, ABILITY_ID::MOVE_MOVE, possible_enemy_base_locations.back(), true);
@@ -106,7 +107,8 @@ void BasicSc2Bot::OnUnitCreated(const Unit *unit)
         }
     }
 
-    if (unit->unit_type == sc2::UNIT_TYPEID::ZERG_ZERGLING) {
+    if (unit->unit_type == sc2::UNIT_TYPEID::ZERG_ZERGLING)
+    {
         Actions()->UnitCommand(unit, ABILITY_ID::MOVE_MOVE, hatcheries.back()->pos);
     }
 }
@@ -207,7 +209,7 @@ void BasicSc2Bot::OnUnitIdle(const Unit *unit)
     case UNIT_TYPEID::ZERG_OVERLORD:
     {
         // Move the Overlord to an enemy base's natural expansion.
-           
+
         break;
     }
     default:
@@ -431,9 +433,9 @@ void BasicSc2Bot::SpamZerglings()
         // Check if we need an Overlord (if we're about to hit the supply cap)
         if (supplyCap - supplyUsed < 6 && minerals >= 100 && CountEggUnitsInProduction(ABILITY_ID::TRAIN_OVERLORD) < 1)
         {
-             // cout << "TRAINING OVERLORD RIGHT HERE LMAOOOOOOO" << endl;
-             Actions()->UnitCommand(larva, ABILITY_ID::TRAIN_OVERLORD);
-             supplyUsed += 8; // Increment used supply assuming the Overlord will be made
+            // cout << "TRAINING OVERLORD RIGHT HERE LMAOOOOOOO" << endl;
+            Actions()->UnitCommand(larva, ABILITY_ID::TRAIN_OVERLORD);
+            supplyUsed += 8; // Increment used supply assuming the Overlord will be made
         }
         if (minerals >= 50) // Check if we have enough minerals for a Zergling
         {
@@ -444,13 +446,13 @@ void BasicSc2Bot::SpamZerglings()
 
 /* This function handles the behaviour of our two queens */
 void BasicSc2Bot::HandleQueens()
-{   
+{
+    const Units &hatcheries = Observation()->GetUnits(Unit::Alliance::Self, IsUnit(UNIT_TYPEID::ZERG_HATCHERY));
     if (hatcheries.empty() || hatcheries.size() < 2)
     {
         return; // EXIT if there are no hatcheries and ensure there is a hatchery at both main and explansion
     }
 
-    int iter = 0;
     for (const auto &queen : queens)
     {
         if (queen->energy < 25)
@@ -458,24 +460,24 @@ void BasicSc2Bot::HandleQueens()
             continue; // skip if the queen doesnt have enough energy
         }
 
-        if (iter == 0) // first queen
+        int queenIndex = std::distance(queens.begin(), std::find(queens.begin(), queens.end(), queen));
+        if (queenIndex == 0) // first queen
         {
             if (!queenHasInjected[queen])
             {
-                InjectLarvae(queen, GetMainBaseHatcheryLocation()); // Inject at main base
+                InjectLarvae(queen, hatcheries.front()); // Inject at main base
                 queenHasInjected[queen] = true;
-                Actions()->UnitCommand(queen, ABILITY_ID::MOVE_MOVE, hatcheries.back()->pos); // Move to expansion
+                Actions()->UnitCommand(queen, ABILITY_ID::MOVE_MOVE, hatcheries[1]->pos); // Move to expansion
             }
             else
             {
-                InjectLarvae(queen, hatcheries.back()); // Continue injecting at expansion
+                InjectLarvae(queen, hatcheries[1]); // Continue injecting at expansion
             }
         }
-        else if (iter == 1) // second queen
+        else if (queenIndex == 1) // second queen
         {
-            InjectLarvae(queen, GetMainBaseHatcheryLocation()); // Always inject at main base
+            InjectLarvae(queen, hatcheries.front()); // Always inject at main base
         }
-        ++iter;
     }
 }
 
@@ -741,11 +743,23 @@ sc2::Point2D BasicSc2Bot::FindExpansionLocation(float minDistanceSquared, float 
         float rx;
         float ry;
 
-        if (selectedMineralPatch->pos.y > FindCenterOfMap(gameInfo).y) { ry = -GetRandomFraction(); }
-        else { ry = GetRandomFraction(); }
+        if (selectedMineralPatch->pos.y > FindCenterOfMap(gameInfo).y)
+        {
+            ry = -GetRandomFraction();
+        }
+        else
+        {
+            ry = GetRandomFraction();
+        }
 
-        if (selectedMineralPatch->pos.x > FindCenterOfMap(gameInfo).x) { rx = -GetRandomFraction(); }
-        else { rx = GetRandomFraction(); }
+        if (selectedMineralPatch->pos.x > FindCenterOfMap(gameInfo).x)
+        {
+            rx = -GetRandomFraction();
+        }
+        else
+        {
+            rx = GetRandomFraction();
+        }
 
         sc2::Point2D build_location = Point2D(selectedMineralPatch->pos.x + rx * 9.0f, selectedMineralPatch->pos.y + ry * 9.0f);
 
